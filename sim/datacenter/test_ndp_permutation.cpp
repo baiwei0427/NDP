@@ -149,9 +149,6 @@ int main(int argc, char **argv)
 	no_of_nodes = top->no_of_nodes();
 	cout << "actual nodes " << no_of_nodes << endl;
 
-    NdpSrc* ndpSrc;
-    NdpSink* ndpSnk;
-
     Route* routeout, *routein;
     double extrastarttime;
 
@@ -172,31 +169,126 @@ int main(int argc, char **argv)
     conns->setPermutation(no_of_conns);    
     cout << "Running perm with " << no_of_conns << " connections" << endl;
 
-    // used just to print out stats data at the end
-    list <const Route*> routes;
-    list <NdpSrc*> ndp_srcs;
-
 	// initialize all sources/sinks
     NdpSrc::setMinRTO(50000);	//increase RTO to 50000us to avoid spurious retransmits
     NdpSrc::setRouteStrategy(route_strategy);
     NdpSink::setRouteStrategy(route_strategy);
 
+    // used just to print out stats data at the end
+    list <const Route*> routes;
+    list <NdpSrc*> ndp_srcs;
+
     int connID = 0;
     map<int,vector<int>*>::iterator it;
 
-    // for each connection group
+    // for each connection group (a single src to multiple destinations)
 	for (it = conns->connections.begin(); it != conns->connections.end(); it++) {
 		int src = (*it).first;	// a single source
 		vector<int>* destinations = (vector<int>*)(*it).second;	// several connections in this group
 
-		// for each destination
+		vector<int> subflows_chosen;
+
+		// for each destination 
 		for (unsigned int dst_id = 0; dst_id < destinations->size(); dst_id++) {
 			connID++;
 	    	int dest = destinations->at(dst_id);
-	    	cout << connID << " (" << src << "->" << dest << ") ";
+	    	//cout << connID << " (" << src << "->" << dest << ") ";
+
+	    	// set paths from source to destination
+	    	if (!net_paths[src][dest]) {
+				vector<const Route*>* paths = top->get_paths(src, dest);
+				net_paths[src][dest] = paths;
+				//cout << src << "->" << dest << " " << paths->size() << " paths" << endl;
+
+				for (unsigned int i = 0; i < paths->size(); i++) {
+		    		routes.push_back((*paths)[i]);
+				}
+	    	}
+
+	    	// set paths from destination to source 
+	    	if (!net_paths[dest][src]) {
+				vector<const Route*>* paths = top->get_paths(dest, src);
+				net_paths[dest][src] = paths;
+	    	}
+
+	    	// for each subflow? I guess
+	    	// Now we only have a single subflow
+	    	for (int connection = 0; connection < 1; connection++) {
+				subflows_chosen.clear();
+
+				int it_sub;
+				int crt_subflow_count = subflow_count;
+
+				tot_subs += crt_subflow_count;	// update total # of subflows
+				cnt_con++;	// total # of connections
+
+				// it_sub = min(crt_subflow_count, net_paths[src][dest]->size())
+				it_sub = crt_subflow_count > net_paths[src][dest]->size() ? net_paths[src][dest]->size() : crt_subflow_count;
+
+				// NDP sender
+				NdpSrc* ndpSrc = new NdpSrc(NULL, NULL, eventlist);
+				ndpSrc->setCwnd(cwnd * Packet::data_packet_size());
+				ndp_srcs.push_back(ndpSrc);
+
+				// NDP receiver
+				NdpSink* ndpSnk = new NdpSink(eventlist, 1);	// pull at line rate
+
+				ndpSrc->setName("ndp_" + ntoa(src) + "_" + ntoa(dest)+"("+ntoa(connection)+")");
+				logfile.writeName(*ndpSrc);
+				ndpSnk->setName("ndp_sink_" + ntoa(src) + "_" + ntoa(dest)+ "("+ntoa(connection)+")");
+				logfile.writeName(*ndpSnk);
+
+				ndpRtxScanner.registerNdp(*ndpSrc);
+
+				// Choose a path randomly
+				int choice = rand() % net_paths[src][dest]->size();
+				subflows_chosen.push_back(choice);
+
+				routeout = new Route(*(net_paths[src][dest]->at(choice)));
+				routeout->push_back(ndpSnk);
+	  			routein = new Route(*top->get_paths(dest,src)->at(choice));
+				routein->push_back(ndpSrc);
+
+				extrastarttime = 0 * drand();
+	  			ndpSrc->connect(*routeout, *routein, *ndpSnk, timeFromMs(extrastarttime));
+
+	  			// I don't understand this part
+	  			switch(route_strategy) {
+					case SCATTER_PERMUTE:
+					case SCATTER_RANDOM:
+					case PULL_BASED: {
+		    			ndpSrc->set_paths(net_paths[src][dest]);
+		    			ndpSnk->set_paths(net_paths[dest][src]);
+
+		    			vector<const Route*>* rts = net_paths[src][dest];
+		    			const Route* rt = rts->at(0);
+		    			PacketSink* first_queue = rt->at(0);
+		    			if (ndpSrc->_log_me) {
+							cout << "First hop: " << first_queue->nodename() << endl;
+							QueueLoggerSimple queue_logger = QueueLoggerSimple();
+							logfile.addLogger(queue_logger);
+							((Queue*)first_queue)->setLogger(&queue_logger);
+		    
+							ndpSrc->set_traffic_logger(&traffic_logger);
+		    			}
+		    			break;
+					}
+					default:
+		    			break;
+				}
+
+				sinkLogger.monitorSink(ndpSnk);
+	    	}
 		}
-		cout << endl;
 	}
+
+    cout << "Mean number of subflows " << ntoa((double)tot_subs/cnt_con)<<endl;
+    cout << "Loaded " << connID << " connections in total" << endl;
+
+    // GO!
+    while (eventlist.doNextEvent()) {
+    	
+    }
 
 	return 0;
 }
