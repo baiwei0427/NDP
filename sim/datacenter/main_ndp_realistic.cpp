@@ -149,6 +149,7 @@ int main(int argc, char **argv)
 	no_of_nodes = top->no_of_nodes();
 	cout << "actual nodes " << no_of_nodes << endl;
 
+	// outgoing (src->dst) and incoming (dst->src) routes
     Route* routeout, *routein;
     double extrastarttime;
 
