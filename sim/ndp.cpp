@@ -172,8 +172,10 @@ void NdpSrc::connect(Route& routeout, Route& routeback, NdpSink& sink, simtime_p
     _sink = &sink;
     _flow.id = id; // identify the packet flow with the NDP source that generated it
     _flow._name = _name;
+    _starttime = starttime; // record start time
+    
     _sink->connect(*this, routeback);
-  
+
     eventlist().sourceIsPending(*this,starttime);
 
     //debugging hacks
@@ -420,7 +422,10 @@ void NdpSrc::processAck(const NdpAck& ack) {
     assert(_flight_size>=0);
 
     if (cum_ackno >= _flow_size){
-	cout << "Flow " << nodename() << " finished at " << timeAsMs(eventlist().now()) << endl;
+        // cout << "Flow " << nodename() << " finished at " << timeAsMs(eventlist().now()) << endl;
+        cout << "Flow " << nodename() << " finished at " << timeAsMs(eventlist().now()) << " ";
+        cout << "FCT: " << timeAsMs(eventlist().now()) - timeAsMs(_starttime) << " ";
+        cout << "Size: " << _flow_size << endl;
     }
 
     update_rtx_time();
