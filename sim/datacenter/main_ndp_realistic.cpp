@@ -20,7 +20,10 @@
 #include "connection_matrix.h"
 #include "fat_tree_topology.h"
 #include <list>
+#include <fstream>
 #include "main.h"
+
+using namespace std;
 
 #define PERIODIC 0
 
@@ -41,7 +44,8 @@ EventList eventlist;
 Logfile* lg;	// log file
 
 
-void print_path(std::ofstream &paths, const Route* rt){
+void print_path(std::ofstream &paths, const Route* rt)
+{
     for (unsigned int i = 1; i < rt->size() - 1; i += 2) {
 		RandomQueue* q = (RandomQueue*)rt->at(i);
 		if (q != NULL) {
@@ -56,12 +60,13 @@ void print_path(std::ofstream &paths, const Route* rt){
 
 int main(int argc, char **argv) 
 {
-	Packet::set_packet_size(9000);	// MTU = 9KB
-	eventlist.setEndtime(timeFromSec(0.201));	// Simulation stops at 0.201 second
-	Clock c(timeFromSec(5 / 100.), eventlist);
+	char *trace_file_name = NULL;
+	Packet::set_packet_size(1500);	// MTU = 1.5KB
+	eventlist.setEndtime(timeFromSec(2.001));	// Simulation stops at 2.001 second
+	Clock c(timeFromSec(2), eventlist);
 
-	int no_of_conns = DEFAULT_NODES;	// # of NDP connections
-	int cwnd = 15;						// NDP initial window in MTU-sized packets
+	int no_of_conns = 0;				// # of NDP connections / flows
+	int cwnd = 23;						// NDP initial window in MTU-sized packets
 	int no_of_nodes = DEFAULT_NODES;	// # of nodes (servers) in the topology
 
 	mem_b queuesize = memFromPkt(DEFAULT_QUEUE_SIZE);	// per-port buffer size in packets in bytes
@@ -81,7 +86,7 @@ int main(int argc, char **argv)
 		} else if (!strcmp(argv[i], "-sub")) {	// # of subflows
 	    	subflow_count = atoi(argv[i + 1]);
 	    	i++;
-		} else if (!strcmp(argv[i], "-conns")){	// # of connections
+		} else if (!strcmp(argv[i], "-conns")){	// # of connections / flows
 	    	no_of_conns = atoi(argv[i + 1]);
 	    	i++;
 		} else if (!strcmp(argv[i], "-nodes")){	// # of nodes in the topology
@@ -91,7 +96,10 @@ int main(int argc, char **argv)
 	    	cwnd = atoi(argv[i + 1]);
 	    	i++;
 		} else if (!strcmp(argv[i], "-q")){	// per-port buffer size 
-	    	queuesize = memFromPkt(atoi(argv[i+1]));
+	    	queuesize = memFromPkt(atoi(argv[i + 1]));
+	    	i++;
+	    } else if (!strcmp(argv[i], "-trace")) {	// flow trace file
+	    	trace_file_name = argv[i + 1];
 	    	i++;
 		} else if (!strcmp(argv[i],"-strat")){	// routing strategy
 	    	if (!strcmp(argv[i + 1], "perm")) {
@@ -110,12 +118,25 @@ int main(int argc, char **argv)
 		i++;
     }
 
+    if (!trace_file_name || no_of_conns == 0) {
+    	if (!no_of_conns) {
+    		cout << "Number of connections should be specified" << endl;
+    	}
+
+    	if (!trace_file_name) {
+    		cout << "Trace file should be specified" << endl;
+    	}
+    	
+    	return 0;
+    }
+
     // Set seed for random number generator
     srand(13);
 
     // Print simulation settings
     cout << "Using subflow count " << subflow_count <<endl;
 	cout << "conns " << no_of_conns << endl;
+	cout << "trace file " << trace_file_name << endl;
     cout << "requested nodes " << no_of_nodes << endl;
     cout << "cwnd " << cwnd << endl;
     cout << "Logging to " << filename.str() << endl;
@@ -131,8 +152,9 @@ int main(int argc, char **argv)
     logfile.setStartTime(timeFromSec(0));
     // The NdpSinkLoggerSampling object will iterate through all NdpSinks and log their rate every 10ms. 
     // This allows us to get throughput measurements after the experiment finishes.
-    NdpSinkLoggerSampling sinkLogger = NdpSinkLoggerSampling(timeFromMs(10), eventlist);
-    logfile.addLogger(sinkLogger);
+    // NdpSinkLoggerSampling sinkLogger = NdpSinkLoggerSampling(timeFromMs(10), eventlist);
+    // logfile.addLogger(sinkLogger);
+    
     NdpTrafficLogger traffic_logger = NdpTrafficLogger();
     logfile.addLogger(traffic_logger);
 	NdpRtxTimerScanner ndpRtxScanner(timeFromMs(10), eventlist);
@@ -151,7 +173,6 @@ int main(int argc, char **argv)
 
 	// outgoing (src->dst) and incoming (dst->src) routes
     Route* routeout, *routein;
-    double extrastarttime;
 
     vector<const Route*>*** net_paths;
     net_paths = new vector<const Route*>**[no_of_nodes];
@@ -179,6 +200,9 @@ int main(int argc, char **argv)
     list <const Route*> routes;
     list <NdpSrc*> ndp_srcs;
 
+    // open the flow trace file
+	ifstream trace_file(trace_file_name);
+
     int connID = 0;
     map<int,vector<int>*>::iterator it;
 
@@ -193,13 +217,13 @@ int main(int argc, char **argv)
 		for (unsigned int dst_id = 0; dst_id < destinations->size(); dst_id++) {
 			connID++;
 	    	int dest = destinations->at(dst_id);
-	    	//cout << connID << " (" << src << "->" << dest << ") ";
+	    	cout << connID << " (" << src << "->" << dest << ") ";
 
 	    	// set paths from source to destination
 	    	if (!net_paths[src][dest]) {
 				vector<const Route*>* paths = top->get_paths(src, dest);
 				net_paths[src][dest] = paths;
-				//cout << src << "->" << dest << " " << paths->size() << " paths" << endl;
+				// cout << src << "->" << dest << " " << paths->size() << " paths" << endl;
 
 				for (unsigned int i = 0; i < paths->size(); i++) {
 		    		routes.push_back((*paths)[i]);
@@ -226,9 +250,19 @@ int main(int argc, char **argv)
 				// it_sub = min(crt_subflow_count, net_paths[src][dest]->size())
 				it_sub = crt_subflow_count > net_paths[src][dest]->size() ? net_paths[src][dest]->size() : crt_subflow_count;
 
+				// read a line from the flow trace file
+				string line;
+				uint64_t flow_size;
+				double start_time;
+				getline(trace_file, line);
+				istringstream iss(line);
+				iss >> flow_size >> start_time;
+				cout << flow_size << " " << start_time << endl;
+
 				// NDP sender
 				NdpSrc* ndpSrc = new NdpSrc(NULL, NULL, eventlist);
 				ndpSrc->setCwnd(cwnd * Packet::data_packet_size());
+				ndpSrc->set_flowsize(flow_size);
 				ndp_srcs.push_back(ndpSrc);
 
 				// NDP receiver
@@ -250,8 +284,7 @@ int main(int argc, char **argv)
 	  			routein = new Route(*top->get_paths(dest,src)->at(choice));
 				routein->push_back(ndpSrc);
 
-				extrastarttime = 0 * drand();
-	  			ndpSrc->connect(*routeout, *routein, *ndpSnk, timeFromMs(extrastarttime));
+	  			ndpSrc->connect(*routeout, *routein, *ndpSnk, timeFromSec(start_time));
 
 	  			// I don't understand this part
 	  			switch(route_strategy) {
@@ -278,18 +311,33 @@ int main(int argc, char **argv)
 		    			break;
 				}
 
-				sinkLogger.monitorSink(ndpSnk);
+				//sinkLogger.monitorSink(ndpSnk);
 	    	}
 		}
 	}
 
+	// close the flow trace file
+	trace_file.close();
+
     cout << "Mean number of subflows " << ntoa((double)tot_subs/cnt_con)<<endl;
     cout << "Loaded " << connID << " connections in total" << endl;
+
+    // Record the setup
+    int pktsize = Packet::data_packet_size();
+    logfile.write("# pktsize=" + ntoa(pktsize) + " bytes");
+    logfile.write("# subflows=" + ntoa(subflow_count));
+    logfile.write("# hostnicrate = " + ntoa(HOST_NIC) + " pkt/sec");
+    logfile.write("# corelinkrate = " + ntoa(HOST_NIC*CORE_TO_HOST) + " pkt/sec");
+    //logfile.write("# buffer = " + ntoa((double) (queues_na_ni[0][1]->_maxsize) / ((double) pktsize)) + " pkt");
+    double rtt = timeAsSec(timeFromUs(RTT));
+    logfile.write("# rtt =" + ntoa(rtt));
 
     // GO!
     while (eventlist.doNextEvent()) {
     	
     }
+
+
 
 	return 0;
 }
