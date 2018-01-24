@@ -139,6 +139,7 @@ int main(int argc, char **argv)
 	cout << "trace file " << trace_file_name << endl;
     cout << "requested nodes " << no_of_nodes << endl;
     cout << "cwnd " << cwnd << endl;
+    cout << "queue size " << queuesize << endl;
     cout << "Logging to " << filename.str() << endl;
 
 	//Log file 
