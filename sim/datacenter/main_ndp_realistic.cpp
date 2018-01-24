@@ -188,7 +188,7 @@ int main(int argc, char **argv)
 
     // Permutation connections
     ConnectionMatrix* conns = new ConnectionMatrix(no_of_nodes);
-    conns->setPermutation(no_of_conns);    
+    conns->setRandom(no_of_conns);    
     cout << "Running perm with " << no_of_conns << " connections" << endl;
 
 	// initialize all sources/sinks
