@@ -1189,10 +1189,10 @@ int NdpPullPacer::_pull_spacing_cdf_count = 0;
 /* Every NdpSink needs an NdpPullPacer to pace out it's PULL packets.
    Multiple incoming flows at the same receiving node much share a
    single pacer */
-NdpPullPacer::NdpPullPacer(EventList& event, double pull_rate_modifier)  : 
+NdpPullPacer::NdpPullPacer(EventList& event, double rate_mbps)  : 
     EventSource(event, "ndp_pacer"), _last_pull(0)
 {
-    _packet_drain_time = (simtime_picosec)(Packet::data_packet_size() * (pow(10.0,12.0) * 8) / speedFromMbps((uint64_t)10000))/pull_rate_modifier;
+    _packet_drain_time = (simtime_picosec)(Packet::data_packet_size() * (pow(10.0,12.0) * 8) / speedFromMbps((uint64_t)rate_mbps));
     _log_me = false;
     _pacer_no = 0;
 }
