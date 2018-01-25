@@ -207,6 +207,13 @@ int main(int argc, char **argv)
     int connID = 0;
     map<int,vector<int>*>::iterator it;
 
+    vector<NdpPullPacer*> pacers;
+    // for each host, we set up a NDP pacer
+    for (int i = 0; i < no_of_nodes; i++) {
+    	NdpPullPacer* pacer = new NdpPullPacer(eventlist,  100000 /*pull at 100Gbps = 100000Mbps*/);
+    	pacers.push_back(pacer);
+    }
+
     // for each connection group (a single src to multiple destinations)
 	for (it = conns->connections.begin(); it != conns->connections.end(); it++) {
 		int src = (*it).first;	// a single source
@@ -266,8 +273,9 @@ int main(int argc, char **argv)
 				ndpSrc->set_flowsize(flow_size);
 				ndp_srcs.push_back(ndpSrc);
 
-				// NDP receiver
-				NdpSink* ndpSnk = new NdpSink(eventlist, 1);	// pull at line rate
+				// NDP receiver. 
+				// We don't specify the pull rate here as multiple pullers may co-exist in the same
+				NdpSink* ndpSnk = new NdpSink(pacers[dest]);
 
 				ndpSrc->setName("ndp_" + ntoa(src) + "_" + ntoa(dest)+"("+ntoa(connection)+")");
 				logfile.writeName(*ndpSrc);
