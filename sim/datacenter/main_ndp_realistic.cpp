@@ -1,3 +1,8 @@
+#include <algorithm>
+
+#undef max 
+#undef min 
+
 #include "config.h"
 #include <sstream>
 #include <strstream>
@@ -187,6 +192,24 @@ int main(int argc, char **argv)
 		}
     }
 
+    // Read flow trace
+    vector<pair<uint64_t, double> > flow_trace;
+	ifstream trace_file(trace_file_name);
+
+	string line;
+	uint64_t flow_size;
+	double start_time;
+	for (i = 0; i < no_of_conns; i++) {
+		getline(trace_file, line);
+		istringstream iss(line);
+		iss >> flow_size >> start_time;
+		flow_trace.push_back(make_pair(flow_size, start_time));
+	}
+	trace_file.close();
+
+	// Shuffle flow IDs
+	random_shuffle(flow_trace.begin(), flow_trace.end());
+
     // Permutation connections
     ConnectionMatrix* conns = new ConnectionMatrix(no_of_nodes);
     conns->setRandom(no_of_conns);    
@@ -200,9 +223,6 @@ int main(int argc, char **argv)
     // used just to print out stats data at the end
     list <const Route*> routes;
     list <NdpSrc*> ndp_srcs;
-
-    // open the flow trace file
-	ifstream trace_file(trace_file_name);
 
     int connID = 0;
     map<int,vector<int>*>::iterator it;
@@ -258,19 +278,10 @@ int main(int argc, char **argv)
 				// it_sub = min(crt_subflow_count, net_paths[src][dest]->size())
 				it_sub = crt_subflow_count > net_paths[src][dest]->size() ? net_paths[src][dest]->size() : crt_subflow_count;
 
-				// read a line from the flow trace file
-				string line;
-				uint64_t flow_size;
-				double start_time;
-				getline(trace_file, line);
-				istringstream iss(line);
-				iss >> flow_size >> start_time;
-				cout << flow_size << " " << start_time << endl;
-
 				// NDP sender
 				NdpSrc* ndpSrc = new NdpSrc(NULL, NULL, eventlist);
 				ndpSrc->setCwnd(cwnd * Packet::data_packet_size());
-				ndpSrc->set_flowsize(flow_size);
+				ndpSrc->set_flowsize(flow_trace[connID - 1].first);
 				ndp_srcs.push_back(ndpSrc);
 
 				// NDP receiver. 
@@ -293,7 +304,7 @@ int main(int argc, char **argv)
 	  			routein = new Route(*top->get_paths(dest,src)->at(choice));
 				routein->push_back(ndpSrc);
 
-	  			ndpSrc->connect(*routeout, *routein, *ndpSnk, timeFromSec(start_time));
+	  			ndpSrc->connect(*routeout, *routein, *ndpSnk, timeFromSec(flow_trace[connID - 1].second));
 
 	  			// I don't understand this part
 	  			switch(route_strategy) {
@@ -325,9 +336,6 @@ int main(int argc, char **argv)
 		}
 	}
 
-	// close the flow trace file
-	trace_file.close();
-
     cout << "Mean number of subflows " << ntoa((double)tot_subs/cnt_con)<<endl;
     cout << "Loaded " << connID << " connections in total" << endl;
 
@@ -345,7 +353,6 @@ int main(int argc, char **argv)
     while (eventlist.doNextEvent()) {
     	
     }
-
 
 
 	return 0;
