@@ -24,7 +24,7 @@
 
 #ifndef QT
 #define QT
-typedef enum {RANDOM, ECN, COMPOSITE, CTRL_PRIO, LOSSLESS, LOSSLESS_INPUT, LOSSLESS_INPUT_ECN} queue_type;
+typedef enum {RANDOM, ECN, COMPOSITE, AEOLUS, CTRL_PRIO, LOSSLESS, LOSSLESS_INPUT, LOSSLESS_INPUT_ECN} queue_type;
 #endif
 
 class FatTreeTopology: public Topology{

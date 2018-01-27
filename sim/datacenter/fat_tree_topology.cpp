@@ -9,6 +9,7 @@
 #include "queue.h"
 #include "switch.h"
 #include "compositequeue.h"
+#include "aeolusqueue.h"
 #include "prioqueue.h"
 #include "queue_lossless.h"
 #include "queue_lossless_input.h"
@@ -104,6 +105,8 @@ Queue* FatTreeTopology::alloc_queue(QueueLogger* queueLogger, uint64_t speed, me
 	return new RandomQueue(speedFromMbps(speed), memFromPkt(SWITCH_BUFFER + RANDOM_BUFFER), *eventlist, queueLogger, memFromPkt(RANDOM_BUFFER));
     else if (qt==COMPOSITE)
 	return new CompositeQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger);
+    else if (qt==AEOLUS)
+  return new AeolusQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger);
     else if (qt==CTRL_PRIO)
 	return new CtrlPrioQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger);
     else if (qt==ECN)
