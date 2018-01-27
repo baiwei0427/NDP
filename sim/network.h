@@ -55,7 +55,7 @@ class Packet {
  public:
     /* empty constructor; Packet::set must always be called as
        well. It's a separate method, for convenient reuse */
-    Packet() {_is_header = false; _bounced = false; _type = IP; _flags = 0;}; 
+    Packet() {_is_header = false; _bounced = false; _type = IP; _flags = 0; _first_rtt = false; }; 
 
     /* say "this packet is no longer wanted". (doesn't necessarily
        destroy it, so it can be reused) */
@@ -105,6 +105,10 @@ class Packet {
     uint32_t nexthop() const {return _nexthop;} // only intended to be used for debugging
     void set_route(const Route &route);
     string str() const;
+
+    bool first_rtt() {return _first_rtt;}   // whether this is a first-RTT packet
+    void set_first_rtt(bool val) {_first_rtt = val;}
+
  protected:
     void set_route(PacketFlow& flow, const Route &route, 
 	     int pkt_size, packetid_t id);
@@ -129,6 +133,8 @@ class Packet {
     packetid_t _id;
     PacketFlow* _flow;
     uint32_t _path_len; // length of the path in hops - used in BCube priority routing with NDP
+
+    bool _first_rtt;    // used with Aeolus 
 };
 
 class PacketSink {

@@ -159,9 +159,11 @@ void NdpSrc::startflow(){
     
     _flight_size = 0;
     _first_window_count = 0;
+    
+    // First-RTT push
     while (_flight_size < _cwnd && _flight_size < _flow_size) {
-	send_packet(0);
-	_first_window_count++;
+	   send_packet(0, true);
+	   _first_window_count++;
     }
 }
 
@@ -575,108 +577,124 @@ void NdpSrc::pull_packets(NdpPull::seq_t pull_no, NdpPull::seq_t pacer_no) {
 }
 
 // Note: the data sequence number is the number of Byte1 of the packet, not the last byte.
-void NdpSrc::send_packet(NdpPull::seq_t pacer_no) {
+void NdpSrc::send_packet(NdpPull::seq_t pacer_no, bool first_rtt) {
     NdpPacket* p;
-    if (!_rtx_queue.empty()) {
-	// There are packets in the RTX queue for us to send
-
-	p = _rtx_queue.front();
-	_rtx_queue.pop_front();
-	p->flow().logTraffic(*p,*this,TrafficLogger::PKT_SEND);
-	p->set_ts(eventlist().now());
-	p->set_pacerno(pacer_no);
-
-	if (_route_strategy == SINGLE_PATH){
-	    p->set_route(*_route);
-	} else {
-	    const Route *rt = choose_route();
-	    p->set_route(*rt);
-	    _path_counts_rtx[p->path_id()]++;
-	}
-	PacketSink* sink = p->sendOn();
-	PriorityQueue *q = dynamic_cast<PriorityQueue*>(sink);
-	assert(q);
-	//Figure out how long before the feeder queue sends this
-	//packet, and add it to the sent time. Packets can spend quite
-	//a bit of time in the feeder queue.  It would be better to
-	//have the feeder queue update the sent time, because the
-	//feeder queue isn't a FIFO but that would be hard to
-	//implement in a real system, so this is a rough proxy.
-	uint32_t service_time = q->serviceTime(*p);  
-	_sent_times[p->seqno()] = eventlist().now() + service_time;
-	_packets_sent ++;
-	_rtx_packets_sent++;
-	update_rtx_time();
-	if (_rtx_timeout == timeInf) {
-	    _rtx_timeout = eventlist().now() + _rto;
-	}
-    } else {
-	// there are no packets in the RTX queue, so we'll send a new one
-	bool last_packet = false;
-	if (_flow_size) {
-	    if (_highest_sent >= _flow_size) {
-		/* we've sent enough new data. */
-		/* xxx should really make the last packet sent be the right size
-		 * if _flow_size is not a multiple of _mss */
-		return;
-	    } 
-	    if (_highest_sent + _mss >= _flow_size) {
-		last_packet = true;
-	    }
-	}
-	switch (_route_strategy) {
-	case SCATTER_PERMUTE:
-	case SCATTER_RANDOM:
-	case PULL_BASED:
-	{
-	    /*
-	    if (_log_me) {
-		cout << "Highest_sent: " << _highest_sent << " Flow_size: " << _flow_size << endl;
-	    }
-	    */
-	    assert(_paths.size() > 0);
-	    const Route *rt = choose_route();
-	    p = NdpPacket::newpkt(_flow, *rt, _highest_sent+1, pacer_no, _mss, false,
-				  _paths.size()>0?_paths.size():1, last_packet);
-	    _path_counts_new[p->path_id()]++;
-	    break;
-	}
-	case SINGLE_PATH:
-	    p = NdpPacket::newpkt(_flow, *_route, _highest_sent+1, pacer_no,
-				  _mss, false, 1,
-				  last_packet);
-	    break;
-	case NOT_SET:
-	    abort();
-	}
-	p->flow().logTraffic(*p,*this,TrafficLogger::PKT_CREATESEND);
-	p->set_ts(eventlist().now());
     
-	_flight_size += _mss;
-	// 	if (_log_me) {
-	// 	    cout << "Sent " << _highest_sent+1 << " FSz: " << _flight_size << endl;
-	// 	}
-	_highest_sent += _mss;  //XX beware wrapping
-	_packets_sent++;
-	_new_packets_sent++;
+    if (!_rtx_queue.empty()) {
+        // There are packets in the RTX queue for us to send
 
-	PacketSink* sink = p->sendOn();
-	PriorityQueue *q = dynamic_cast<PriorityQueue*>(sink);
-	assert(q);
-	//Figure out how long before the feeder queue sends this
-	//packet, and add it to the sent time. Packets can spend quite
-	//a bit of time in the feeder queue.  It would be better to
-	//have the feeder queue update the sent time, because the
-	//feeder queue isn't a FIFO but that would be hard to
-	//implement in a real system, so this is a rough proxy.
-	uint32_t service_time = q->serviceTime(*p);  
-	//cout << "service_time2: " << service_time << endl;
-	_sent_times[p->seqno()] = eventlist().now() + service_time;
-	_first_sent_times[p->seqno()] = eventlist().now();
+        p = _rtx_queue.front();
+        _rtx_queue.pop_front();
+        p->flow().logTraffic(*p,*this,TrafficLogger::PKT_SEND);
+        p->set_ts(eventlist().now());
+        p->set_pacerno(pacer_no);
 
-	if (_rtx_timeout == timeInf) {
-	    _rtx_timeout = eventlist().now() + _rto;
-	}
+        if (_route_strategy == SINGLE_PATH) {
+            p->set_route(*_route);
+        } else {
+            const Route *rt = choose_route();
+            p->set_route(*rt);
+	       _path_counts_rtx[p->path_id()]++;
+        }
+
+        PacketSink* sink = p->sendOn();
+        PriorityQueue *q = dynamic_cast<PriorityQueue*>(sink);
+        assert(q);
+	   
+        //Figure out how long before the feeder queue sends this
+	    //packet, and add it to the sent time. Packets can spend quite
+	    //a bit of time in the feeder queue.  It would be better to
+	    //have the feeder queue update the sent time, because the
+	    //feeder queue isn't a FIFO but that would be hard to
+	    //implement in a real system, so this is a rough proxy.
+        uint32_t service_time = q->serviceTime(*p);  
+        _sent_times[p->seqno()] = eventlist().now() + service_time;
+        _packets_sent ++;
+        _rtx_packets_sent++;
+        update_rtx_time();
+	
+        if (_rtx_timeout == timeInf) {
+	       _rtx_timeout = eventlist().now() + _rto;
+        }
+
+    } else {
+        // there are no packets in the RTX queue, so we'll send a new one
+        bool last_packet = false;
+        if (_flow_size) {
+            if (_highest_sent >= _flow_size) {
+            /* we've sent enough new data. */
+            /* xxx should really make the last packet sent be the right size
+		     * if _flow_size is not a multiple of _mss */
+                return;
+            } 
+	    
+            if (_highest_sent + _mss >= _flow_size) {
+                last_packet = true;
+            }
+        }
+	   
+        switch (_route_strategy) {
+            case SCATTER_PERMUTE:
+            case SCATTER_RANDOM:
+            case PULL_BASED:
+	        {
+	           /*
+	            if (_log_me) {
+		          cout << "Highest_sent: " << _highest_sent << " Flow_size: " << _flow_size << endl;
+                }
+	           */
+                assert(_paths.size() > 0);
+                const Route *rt = choose_route();
+                p = NdpPacket::newpkt(_flow, *rt, _highest_sent+1, pacer_no, _mss, false,
+				  _paths.size()>0?_paths.size():1, last_packet);
+                _path_counts_new[p->path_id()]++;
+                break;
+            }
+            case SINGLE_PATH:
+                p = NdpPacket::newpkt(_flow, *_route, _highest_sent+1, pacer_no,
+				  _mss, false, 1, last_packet);
+                break;
+            case NOT_SET:
+                abort();
+        }
+        
+        p->flow().logTraffic(*p,*this,TrafficLogger::PKT_CREATESEND);
+        p->set_ts(eventlist().now());
+    
+        _flight_size += _mss;
+	    // 	if (_log_me) {
+	    // 	    cout << "Sent " << _highest_sent+1 << " FSz: " << _flight_size << endl;
+	    // 	}
+	    _highest_sent += _mss;  //XX beware wrapping
+        _packets_sent++;
+        _new_packets_sent++;
+
+        PacketSink* sink = p->sendOn();
+        PriorityQueue *q = dynamic_cast<PriorityQueue*>(sink);
+        assert(q);
+
+        //Figure out how long before the feeder queue sends this
+        //packet, and add it to the sent time. Packets can spend quite
+        //a bit of time in the feeder queue.  It would be better to
+        //have the feeder queue update the sent time, because the
+        //feeder queue isn't a FIFO but that would be hard to
+        //implement in a real system, so this is a rough proxy.
+        uint32_t service_time = q->serviceTime(*p);  
+	
+        //cout << "service_time2: " << service_time << endl;
+	    _sent_times[p->seqno()] = eventlist().now() + service_time;
+	    _first_sent_times[p->seqno()] = eventlist().now();
+
+        if (_rtx_timeout == timeInf) {
+            _rtx_timeout = eventlist().now() + _rto;
+        }
+    }
+
+    // Set first-RTT priority
+    if (first_rtt) {
+        p->set_first_rtt(true);
+    } else {
+        p->set_first_rtt(false);
     }
 }
 

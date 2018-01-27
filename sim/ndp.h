@@ -133,7 +133,7 @@ class NdpSrc : public PacketSink, public EventSource {
     const Route *choose_route();
 
     void pull_packets(NdpPull::seq_t pull_no, NdpPull::seq_t pacer_no);
-    void send_packet(NdpPull::seq_t pacer_no);
+    void send_packet(NdpPull::seq_t pacer_no, bool first_rtt = false);
 
     virtual const string& nodename() { return _nodename; }
     inline uint32_t flow_id() const { return _flow.flow_id();}
