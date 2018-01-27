@@ -1,5 +1,5 @@
-OBJS=eventlist.o tcppacket.o pipe.o queue.o queue_lossless.o queue_lossless_input.o queue_lossless_output.o ecnqueue.o tcp.o dctcp.o mtcp.o loggers.o logfile.o clock.o config.o network.o qcn.o exoqueue.o randomqueue.o cbr.o cbrpacket.o sent_packets.o ndp.o ndppacket.o eth_pause_packet.o tcp_transfer.o tcp_periodic.o compositequeue.o prioqueue.o cpqueue.o ndp_transfer.o compositeprioqueue.o switch.o dctcp_transfer.o fairpullqueue.o route.o
-HDRS=network.h ndp.h queue_lossless.h queue_lossless_input.h queue_lossless_output.h compositequeue.h prioqueue.h cpqueue.h queue.h loggers.h loggertypes.h pipe.h eventlist.h config.h tcp.h dctcp.h mtcp.h sent_packets.h tcppacket.h ndppacket.h eth_pause_packet.h ndp_transfer.h compositeprioqueue.h ecnqueue.h switch.h dctcp_transfer.h 
+OBJS=eventlist.o tcppacket.o pipe.o queue.o queue_lossless.o queue_lossless_input.o queue_lossless_output.o ecnqueue.o tcp.o dctcp.o mtcp.o loggers.o logfile.o clock.o config.o network.o qcn.o exoqueue.o randomqueue.o cbr.o cbrpacket.o sent_packets.o ndp.o ndppacket.o eth_pause_packet.o tcp_transfer.o tcp_periodic.o compositequeue.o aeolusqueue.o prioqueue.o cpqueue.o ndp_transfer.o compositeprioqueue.o switch.o dctcp_transfer.o fairpullqueue.o route.o
+HDRS=network.h ndp.h queue_lossless.h queue_lossless_input.h queue_lossless_output.h compositequeue.h aeolusqueue.h prioqueue.h cpqueue.h queue.h loggers.h loggertypes.h pipe.h eventlist.h config.h tcp.h dctcp.h mtcp.h sent_packets.h tcppacket.h ndppacket.h eth_pause_packet.h ndp_transfer.h compositeprioqueue.h ecnqueue.h switch.h dctcp_transfer.h 
 
 CC=g++ 
 CFLAGS= -Wall -g -std=c++0x
@@ -17,6 +17,7 @@ htsim:	$(OBJS) main.o
 
 clean:	
 	rm -f *.o htsim htsim_* libhtsim.a
+
 parse_output.o: parse_output.cpp libhtsim.a
 config.o:	config.cpp config.h
 switch.o: 	switch.cpp switch.h
@@ -43,6 +44,7 @@ loggers.o:	loggers.cpp $(HDRS)
 logfile.o:	logfile.cpp  $(HDRS)
 clock.o:	clock.cpp clock.h eventlist.h config.h
 compositequeue.o: compositequeue.cpp $(HDRS)
+aeolusqueue.o : aeolusqueue.cpp $(HDRS) 
 prioqueue.o: prioqueue.cpp $(HDRS)
 cpqueue.o: cpqueue.cpp $(HDRS)
 compositeprioqueue.o: compositeprioqueue.cpp $(HDRS)
