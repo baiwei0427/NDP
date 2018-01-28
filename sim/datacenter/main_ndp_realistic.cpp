@@ -81,6 +81,8 @@ int main(int argc, char **argv)
 
     RouteStrategy route_strategy = SCATTER_PERMUTE;	// default routing strategy
 
+	bool enable_aeolus = false;
+
     // Parse arguments and overide default values
     int i = 1;
     while (i < argc) {
@@ -117,6 +119,8 @@ int main(int argc, char **argv)
 				route_strategy = SINGLE_PATH;
 	    	}
 	    	i++;
+	    } else if (!strcmp(argv[i],"-aeolus")) { // enable Aeolus
+	    	enable_aeolus = true;
 		} else {
 
 		}
@@ -125,11 +129,11 @@ int main(int argc, char **argv)
 
     if (!trace_file_name || no_of_conns == 0) {
     	if (!no_of_conns) {
-    		cout << "Number of connections should be specified" << endl;
+    		cerr << "Number of connections should be specified" << endl;
     	}
 
     	if (!trace_file_name) {
-    		cout << "Trace file should be specified" << endl;
+    		cerr << "Trace file should be specified" << endl;
     	}
     	
     	return 0;
@@ -137,6 +141,11 @@ int main(int argc, char **argv)
 
     // Set seed for random number generator
     srand(13);
+
+    if (enable_aeolus)
+    	cout << "Transport: Aeolus" << endl;
+    else 
+    	cout << "Transport: NDP" << endl;
 
     // Print simulation settings
     cout << "Using subflow count " << subflow_count <<endl;
@@ -166,13 +175,24 @@ int main(int argc, char **argv)
 	NdpRtxTimerScanner ndpRtxScanner(timeFromMs(10), eventlist);
 
     // Build a fat-tree topology
-    FatTreeTopology* top = new FatTreeTopology(no_of_nodes, 
-    										   queuesize, 
-					       				       &logfile, 
-					       				       &eventlist,
-					       				       ff,			// Unknown parameter
-					       				       COMPOSITE,	// Type of queue for NDP
-					       				       0);
+    FatTreeTopology *top;
+    if (enable_aeolus) {
+    	top = new FatTreeTopology(no_of_nodes, 
+    							  queuesize, 
+					       	      &logfile, 
+					       		  &eventlist,
+					       		  ff,			// Unknown parameter
+					       		  AEOLUS,
+					       		  0);
+    } else {
+    	top = new FatTreeTopology(no_of_nodes, 
+    							  queuesize, 
+					       	      &logfile, 
+					       		  &eventlist,
+					       		  ff,			// Unknown parameter
+					       		  COMPOSITE,
+					       		  0); 	
+    }
 
 	no_of_nodes = top->no_of_nodes();
 	cout << "actual nodes " << no_of_nodes << endl;
